@@ -215,15 +215,31 @@ module DatapathSingleCycle (
         .sum (cla_sum)
     );
 
-    // --- DIVIDER ---
-    wire [31:0] div_rem_out;
-    wire [31:0] div_quot_out;
+    // --- DIVIDER WRAPPER ---
+    // 1. Check if the instruction is signed (DIV or REM)
+    wire is_signed_div = inst_div || inst_rem;
+
+    // 2. Calculate Absolute Values
+    // If instruction is signed AND input is negative, make it positive.
+    wire [31:0] div_in_a = (is_signed_div && rs1_data[31]) ? -rs1_data : rs1_data;
+    wire [31:0] div_in_b = (is_signed_div && rs2_data[31]) ? -rs2_data : rs2_data;
+
+    wire [31:0] div_rem_u;  // Unsigned remainder result
+    wire [31:0] div_quot_u; // Unsigned quotient result
+
     divider_unsigned my_div (
-        .i_dividend (rs1_data),
-        .i_divisor  (rs2_data),
-        .o_remainder(div_rem_out),
-        .o_quotient (div_quot_out)
+        .i_dividend  (div_in_a),
+        .i_divisor   (div_in_b),
+        .o_remainder (div_rem_u),
+        .o_quotient  (div_quot_u)
     );
+
+    // 3. Fix Output Signs
+    // DIV: Result is negative if signs of operands differ
+    wire [31:0] div_quot_signed = (rs2_data == 32'd0) ? 32'hFFFFFFFF : 
+                                  ((rs1_data[31] != rs2_data[31]) ? -div_quot_u : div_quot_u);
+    // REM: Result sign always follows the dividend (rs1)
+    wire [31:0] div_rem_signed  = (rs1_data[31]) ? -div_rem_u : div_rem_u;
 
     // --- Control Logic & Datapath Muxes ---
     reg illegal_inst;
@@ -334,13 +350,11 @@ module DatapathSingleCycle (
                 rf_we_mux = 1'b1;
                 // ADD/SUB use CLA
                 if (inst_add || inst_sub) rd_data_mux = cla_sum;
-                // DIV/REM use Divider
-                else if (inst_div)  rd_data_mux = ($signed(rs1_data) == -2147483648 && $signed(rs2_data) == -1) ? -2147483648 : 
-                                                  (rs2_data == 0) ? -1 : ($signed(rs1_data) / $signed(rs2_data)); // Signed Div logic
-                else if (inst_divu) rd_data_mux = div_quot_out; // Unsigned (Using your module)
-                else if (inst_rem)  rd_data_mux = ($signed(rs1_data) == -2147483648 && $signed(rs2_data) == -1) ? 0 : 
-                                                  (rs2_data == 0) ? rs1_data : ($signed(rs1_data) % $signed(rs2_data));
-                else if (inst_remu) rd_data_mux = div_rem_out;  // Unsigned (Using your module)
+                // DIV/REM use the Divider outputs calculated above
+                else if (inst_div)  rd_data_mux = div_quot_signed;
+                else if (inst_divu) rd_data_mux = div_quot_u;
+                else if (inst_rem)  rd_data_mux = div_rem_signed;
+                else if (inst_remu) rd_data_mux = div_rem_u;
                 // Logical / Shift / Mul
                 else if (inst_sll)  rd_data_mux = rs1_data << rs2_data[4:0];
                 else if (inst_slt)  rd_data_mux = ($signed(rs1_data) < $signed(rs2_data)) ? 32'd1 : 32'd0;
@@ -356,7 +370,22 @@ module DatapathSingleCycle (
 		else if (inst_mulhu)  rd_data_mux = 32'(({{32'd0}, rs1_data} * {{32'd0}, rs2_data}) >> 32);
             end
             OpEnviron: begin
-                if (inst_ecall) halt = 1'b1;
+                if (inst_ecall) begin
+                    halt = 1'b1;
+                end else begin
+                    // FIX: Full CSR Support for Dhrystone
+                    rf_we_mux = 1'b1;
+                    
+                    // Check the CSR address (bits 31:20)
+                    case (inst_from_imem[31:20])
+                        12'hC00: rd_data_mux = cycles_current;   // cycle
+                        12'hC01: rd_data_mux = cycles_current;   // time (aliased to cycle)
+                        12'hC02: rd_data_mux = num_inst_current; // instret
+                        // Note: cycleh (0xC80), timeh (0xC81), instreth (0xC82) 
+                        // will fall into default and return 0, which is correct for 32-bit.
+                        default: rd_data_mux = 32'd0;            // mhartid, etc.
+                    endcase
+                end
             end
             OpMiscMem: begin
                 // FENCE - No op for this lab

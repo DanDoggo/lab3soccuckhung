@@ -48,6 +48,8 @@ module gp8(input wire [7:0] gin, pin,
    assign pout = &pin;
 
    // --- Aggregate Generate ---
+   // For Group Generate, we DO include the pin corresponding to the gin 
+   // strictly for the chain. Standard CLA formulation:
    assign gout = gin[7] |
                  (pin[7] & gin[6]) |
                  (pin[7] & pin[6] & gin[5]) |
@@ -58,41 +60,49 @@ module gp8(input wire [7:0] gin, pin,
                  (pin[7] & pin[6] & pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & gin[0]);
 
    // --- Internal Carries (C1 to C7) ---
+   // FIX: Ensure pin list stops at the bit *above* the gin index.
+   
    assign cout[0] = gin[0] | (pin[0] & cin);
    
-   assign cout[1] = gin[1] | (pin[1] & gin[0]) | 
-                  (pin[1] & pin[0] & cin);
+   assign cout[1] = gin[1] | 
+                    (pin[1] & gin[0]) | 
+                    (pin[1] & pin[0] & cin);
                   
-   assign cout[2] = gin[2] | (pin[2] & gin[1]) | 
-                  (pin[2] & pin[1] & gin[0]) | 
-                  (pin[2] & pin[1] & pin[0] & cin);
+   assign cout[2] = gin[2] |
+                    (pin[2] & gin[1]) | 
+                    (pin[2] & pin[1] & gin[0]) | 
+                    (pin[2] & pin[1] & pin[0] & cin);
 
-   assign cout[3] = gin[3] | (pin[3] & gin[2]) | 
-                  (pin[3] & pin[2] & gin[1]) | 
-                  (pin[3] & pin[2] & gin[1] & gin[0]) | 
-                  (pin[3] & pin[2] & pin[1] & pin[0] & cin);
+   assign cout[3] = gin[3] | 
+                    (pin[3] & gin[2]) | 
+                    (pin[3] & pin[2] & gin[1]) |
+                    (pin[3] & pin[2] & pin[1] & gin[0]) | 
+                    (pin[3] & pin[2] & pin[1] & pin[0] & cin);
+
+   assign cout[4] = gin[4] | 
+                    (pin[4] & gin[3]) | 
+                    (pin[4] & pin[3] & gin[2]) |
+                    (pin[4] & pin[3] & gin[2] & gin[1]) | 
+                    (pin[4] & pin[3] & pin[2] & pin[1] & gin[0]) |
+                    (pin[4] & pin[3] & pin[2] & pin[1] & pin[0] & cin);
+
+   assign cout[5] = gin[5] | 
+                    (pin[5] & gin[4]) |
+                    (pin[5] & pin[4] & gin[3]) | 
+                    (pin[5] & pin[4] & pin[3] & gin[2]) |
+                    (pin[5] & pin[4] & pin[3] & pin[2] & gin[1]) |
+                    (pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & gin[0]) |
+                    (pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & pin[0] & cin);
                   
-   assign cout[4] = gin[4] | (pin[4] & gin[3]) | 
-                  (pin[4] & pin[3] & gin[2]) | 
-                  (pin[4] & pin[3] & gin[2] & gin[1]) | 
-                  (pin[4] & pin[3] & pin[2] & pin[1] & gin[0]) | 
-                  (pin[4] & pin[3] & pin[2] & pin[1] & pin[0] & cin);
-
-   assign cout[5] = gin[5] | (pin[5] & gin[4]) | 
-                  (pin[5] & pin[4] & gin[3]) | 
-                  (pin[5] & pin[4] & pin[3] & gin[2]) | 
-                  (pin[5] & pin[4] & pin[3] & pin[2] & gin[1]) | 
-                  (pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & gin[0]) | 
-                  (pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & pin[0] & cin);
-                  
-   assign cout[6] = gin[6] | (pin[6] & gin[5]) | 
-                  (pin[6] & pin[5] & pin[4] & gin[4]) | 
-                  (pin[6] & pin[5] & pin[4] & gin[3]) | 
-                  (pin[6] & pin[5] & pin[4] & pin[3] & gin[2]) | 
-                  (pin[6] & pin[5] & pin[4] & pin[3] & pin[2] & gin[1]) | 
-                  (pin[6] & pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & gin[0]) | 
-                  (pin[6] & pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & pin[0] & cin);
-
+   // This was the specific problematic block in your screenshot
+   assign cout[6] = gin[6] |
+                    (pin[6] & gin[5]) | 
+                    (pin[6] & pin[5] & gin[4]) |                       // <--- Corrected: Removed pin[4]
+                    (pin[6] & pin[5] & pin[4] & gin[3]) | 
+                    (pin[6] & pin[5] & pin[4] & pin[3] & gin[2]) |
+                    (pin[6] & pin[5] & pin[4] & pin[3] & pin[2] & gin[1]) |
+                    (pin[6] & pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & gin[0]) |
+                    (pin[6] & pin[5] & pin[4] & pin[3] & pin[2] & pin[1] & pin[0] & cin);
 endmodule
 
 module cla

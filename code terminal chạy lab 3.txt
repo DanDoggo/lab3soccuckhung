@@ -1,0 +1,22 @@
+# --- 1. Install System Tools (Password required) ---
+sudo apt update
+sudo apt install -y build-essential python3-venv python3-dev verilator git
+
+# --- 2. Create Python Environment ---
+# Remove old one if it exists to be safe
+rm -rf soc_env
+python3 -m venv soc_env
+
+# --- 3. Activate Environment ---
+source soc_env/bin/activate
+
+# --- 4. Install Python Libraries ---
+# Note: Installing 'cocotbext' packages fixes the "module not found" error
+pip install --upgrade pip
+pip install pytest "cocotb<2.0" cocotb-test cocotbext-axi cocotbext-uart
+
+# --- 5. Run the Test ---
+# This runs the specific test runner we fixed in your code
+pytest testbench.py -k "test_processor"
+
+muốn chạy lại thì chạy bước 3 và 5
